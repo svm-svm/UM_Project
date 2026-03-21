@@ -79,9 +79,9 @@ if st.button("Predict"):
 
     input_df = build_input_row()
 
-    enroll_pred = enroll_model.predict(input_df)[0]
-    revenue_pred = rev_model.predict(input_df)[0]
-
+    enroll_pred = max(0, enroll_model.predict(input_df)[0])
+    revenue_pred = max(0, rev_model.predict(input_df)[0])
+  
     st.subheader("Predictions")
 
     st.metric("Predicted Enrollments", int(enroll_pred))
