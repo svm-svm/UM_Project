@@ -1,0 +1,11 @@
+This project develops a predictive analytics framework for EduPro, an online learning platform, to forecast course demand and revenue. Traditional planning at EduPro relies primarily on historical reporting and intuition, limiting the platform’s ability to make proactive decisions regarding course launches, pricing strategies, and instructor allocation. To address this gap, this study introduces machine learning–based predictive models that estimate enrollment demand and revenue at the course level.
+
+The analysis integrates multi-sheet platform data, including course attributes and transaction records. Transaction-level data were aggregated to derive course-level demand indicators such as enrollment count, total revenue, and revenue per enrollment. A structured data preparation pipeline was implemented to handle missing values, manage cold-start courses, and engineer meaningful features including pricing bands, duration buckets, rating tiers, and historical performance metrics.
+
+Exploratory data analysis revealed significant variation in demand across categories, observable price sensitivity, and a positive relationship between course ratings and enrollment. Multiple predictive models were evaluated, including Linear Regression, Ridge, Lasso, Random Forest, and Gradient Boosting. Tree-based models demonstrated strong capability in capturing nonlinear demand behavior, while regularized linear models provided stable baseline performance.
+
+Feature importance analysis identified course price, rating, category, and historical performance as primary drivers of enrollment and revenue. These findings highlight actionable opportunities for pricing optimization, portfolio planning, and targeted course development.
+
+To operationalize the models, an interactive Streamlit dashboard was developed, enabling stakeholders to simulate course scenarios and obtain real-time demand and revenue forecasts. This decision-support tool transforms predictive outputs into practical planning insights.
+
+Overall, the project demonstrates how predictive intelligence can shift EduPro from reactive reporting toward data-driven strategic planning, reducing business risk and improving resource allocation.
