@@ -1,11 +1,17 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import os
 
-enroll_model = joblib.load("enrollment_model.pkl")
-rev_model = joblib.load("revenue_model.pkl")
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
-data = pd.read_csv("edupro_prepared_dataset.csv")
+data_path = os.path.join(BASE_DIR, "edupro_prepared_dataset.csv")
+enroll_model_path = os.path.join(BASE_DIR, "model", "enrollment_model.pkl")
+rev_model_path = os.path.join(BASE_DIR, "model", "revenue_model.pkl")
+
+data = pd.read_csv(data_path)
+enroll_model = joblib.load(enroll_model_path)
+rev_model = joblib.load(rev_model_path)
 
 st.title("EduPro — Course Demand & Revenue Forecast")
 
