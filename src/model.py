@@ -114,11 +114,11 @@ joblib.dump({
     "model": best_enroll_model,
     "model_name": best_enroll_name,
     "features": X.columns.tolist()
-}, "enrollment_model.pkl")
+}, "model/enrollment_model.pkl")
 
 joblib.dump({
     "model": best_rev_model,
     "model_name": best_rev_name,
     "features": X.columns.tolist()
-}, "revenue_model.pkl")
+}, "model/revenue_model.pkl")
 
