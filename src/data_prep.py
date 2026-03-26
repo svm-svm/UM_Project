@@ -5,7 +5,7 @@ import seaborn as sns
 
 sns.set(style="whitegrid")
 
-file_path = "EduPro Online Platform.xlsx"
+file_path = "data/EduPro Online Platform.xlsx"
 
 users = pd.read_excel(file_path, sheet_name='Users')
 courses = pd.read_excel(file_path, sheet_name='Courses')
