@@ -1,132 +1,123 @@
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set(style="whitegrid")
 
 file_path = "EduPro Online Platform.xlsx"
 
-courses = pd.read_excel(file_path, sheet_name="Courses")
-transactions = pd.read_excel(file_path, sheet_name="Transactions")
-
-try:
-    teachers = pd.read_excel(file_path, sheet_name="Teachers")
-except:
-    teachers = None
-
-print("Courses columns:", courses.columns)
-print("Transactions columns:", transactions.columns)
-if teachers is not None:
-    print("Teachers columns:", teachers.columns)
-
-#clean
-courses = courses.drop_duplicates(subset="CourseID")
-
-num_cols = ["CoursePrice", "CourseDuration", "CourseRating"]
-for c in num_cols:
-    if c in courses.columns:
-        courses[c] = pd.to_numeric(courses[c], errors="coerce")
-
-courses["CoursePrice"] = courses["CoursePrice"].fillna(0)
-courses["CourseDuration"] = courses["CourseDuration"].fillna(courses["CourseDuration"].median())
-courses["CourseRating"] = courses["CourseRating"].fillna(courses["CourseRating"].median())
-
-
-transactions = transactions.drop_duplicates()
-
-transactions["TransactionDate"] = pd.to_datetime(transactions["TransactionDate"])
-transactions["Amount"] = pd.to_numeric(transactions["Amount"], errors="coerce")
-
-transactions = transactions[transactions["Amount"] >= 0]
-
-
-course_perf = (
-    transactions
-    .groupby("CourseID")
-    .agg(
-        EnrollmentCount=("TransactionID", "count"),
-        CourseRevenue=("Amount", "sum"),
-        AvgRevenuePerEnrollment=("Amount", "mean")
-    )
-    .reset_index()
-)
+users = pd.read_excel(file_path, sheet_name='Users')
+courses = pd.read_excel(file_path, sheet_name='Courses')
+teachers = pd.read_excel(file_path, sheet_name='Teachers')
+transactions = pd.read_excel(file_path, sheet_name='Transactions')
 
 #merge
-data = courses.merge(course_perf, on="CourseID", how="left")
+df = transactions.merge(courses, on='CourseID', how='left')
+df = df.merge(teachers, on='TeacherID', how='left')
+
+print("Merged Dataset Shape:", df.shape)
+print(df.head())
 
 
-data["EnrollmentCount"] = data["EnrollmentCount"].fillna(0)
-data["CourseRevenue"] = data["CourseRevenue"].fillna(0)
-data["AvgRevenuePerEnrollment"] = data["AvgRevenuePerEnrollment"].fillna(0)
-
-
-if teachers is not None:
-
-    if "TeacherID" in courses.columns and "TeacherID" in teachers.columns:
-
-        teachers = teachers.drop_duplicates(subset="TeacherID")
-
-        if "YearsOfExperience" in teachers.columns:
-            teachers["YearsOfExperience"] = pd.to_numeric(
-                teachers["YearsOfExperience"], errors="coerce"
-            ).fillna(0)
-
-        if "TeacherRating" in teachers.columns:
-            teachers["TeacherRating"] = pd.to_numeric(
-                teachers["TeacherRating"], errors="coerce"
-            ).fillna(teachers["TeacherRating"].median())
-
-        data = data.merge(teachers, on="TeacherID", how="left")
-
-#feature
-# 1
-data["PriceBand"] = pd.cut(
-    data["CoursePrice"],
-    bins=[0, 50, 200, 1000],
-    labels=["Low", "Medium", "High"]
+#feature eng
+#1.price
+df['PriceBand'] = pd.cut(
+    df['CoursePrice'],
+    bins=[-1, 50, 150, 500],
+    labels=['Low', 'Medium', 'High']
 )
 
-# 2
-data["DurationBucket"] = pd.cut(
-    data["CourseDuration"],
-    bins=[0, 5, 20, 100],
-    labels=["Short", "Medium", "Long"]
+#2. duration
+df['DurationBucket'] = pd.cut(
+    df['CourseDuration'],
+    bins=[0, 15, 35, 60],
+    labels=['Short', 'Medium', 'Long']
 )
 
-# 3
-data["RatingTier"] = pd.cut(
-    data["CourseRating"],
-    bins=[0, 3.5, 4.3, 5],
-    labels=["Low", "Good", "Top"]
+# 3. rating
+df['RatingTier'] = pd.cut(
+    df['CourseRating'],
+    bins=[0, 3, 4, 4.5, 5],
+    labels=['Poor', 'Average', 'Good', 'Excellent']
 )
 
+# 4. level
+level_map = {'Beginner': 1, 'Intermediate': 2, 'Advanced': 3}
+df['CourseLevelEncoded'] = df['CourseLevel'].map(level_map)
 
-if "CourseLevel" in data.columns:
-    level_map = {"Beginner": 1, "Intermediate": 2, "Advanced": 3}
-    data["CourseLevelEncoded"] = data["CourseLevel"].map(level_map)
-
-#4
-category_revenue = (
-    data.groupby("CourseCategory")["CourseRevenue"]
-    .sum()
-    .reset_index()
-    .rename(columns={"CourseRevenue": "CategoryRevenue"})
+# 5.exp
+df['ExperienceBucket'] = pd.cut(
+    df['YearsOfExperience'],
+    bins=[0, 2, 5, 10, 20],
+    labels=['Junior', 'Mid', 'Senior', 'Expert']
 )
 
-data = data.merge(category_revenue, on="CourseCategory", how="left")
+# 6.rev 
+df['RevenuePerEnrollment'] = df['Amount']  
+df['ValueScore'] = df['CourseRating'] / (df['CoursePrice'] + 1)
+
+#add
+
+agg_df = df.groupby('CourseID').agg({
+    'Amount': ['sum', 'mean', 'count'],
+    'CoursePrice': 'first',
+    'CourseDuration': 'first',
+    'CourseRating': 'first',
+    'CourseCategory': 'first',
+    'CourseType': 'first',
+    'CourseLevel': 'first',
+    'CourseLevelEncoded': 'first',
+    'PriceBand': 'first',
+    'DurationBucket': 'first',
+    'RatingTier': 'first',
+    'TeacherRating': 'mean',
+    'YearsOfExperience': 'mean'
+}).reset_index()
 
 
-transactions["Month"] = transactions["TransactionDate"].dt.month
+agg_df.columns = [
+    'CourseID',
+    'CourseRevenue',
+    'AvgRevenuePerEnrollment',
+    'EnrollmentCount',
+    'CoursePrice',
+    'CourseDuration',
+    'CourseRating',
+    'CourseCategory',
+    'CourseType',
+    'CourseLevel',
+    'CourseLevelEncoded',
+    'PriceBand',
+    'DurationBucket',
+    'RatingTier',
+    'AvgTeacherRating',
+    'AvgExperience'
+]
 
-monthly = (
-    transactions.groupby("CourseID")
-    .size()
-    .reset_index(name="MonthlyEnrollments")
-)
+#rev
+category_revenue = agg_df.groupby('CourseCategory')['CourseRevenue'].transform('sum')
+agg_df['CategoryRevenue'] = category_revenue
 
-data = data.merge(monthly, on="CourseID", how="left")
-data["MonthlyEnrollments"] = data["MonthlyEnrollments"].fillna(0)
+# enrollments
+monthly_enrollments = df.groupby(['CourseID', pd.Grouper(key='TransactionDate', freq='M')]).size().reset_index(name='MonthlyEnrollments')
 
-#final
-print("\nFinal dataset shape:", data.shape)
-print(data.head())
+monthly_avg = monthly_enrollments.groupby('CourseID')['MonthlyEnrollments'].mean().reset_index()
 
-data.to_csv("edupro_prepared_dataset.csv", index=False)
-print("\nSaved → edupro_prepared_dataset.csv")
+agg_df = agg_df.merge(monthly_avg, on='CourseID', how='left')
+
+#missing values
+agg_df['PriceBand'] = agg_df['PriceBand'].fillna('Medium')
+agg_df['DurationBucket'] = agg_df['DurationBucket'].fillna('Medium')
+agg_df['RatingTier'] = agg_df['RatingTier'].fillna('Average')
+agg_df['AvgTeacherRating'] = agg_df['AvgTeacherRating'].fillna(agg_df['AvgTeacherRating'].mean())
+agg_df['AvgExperience'] = agg_df['AvgExperience'].fillna(agg_df['AvgExperience'].mean())
+
+
+print("\nFinal Aggregated Dataset Shape:", agg_df.shape)
+print(agg_df.head())
+
+# Save 
+agg_df.to_csv("processed_edupro_data.csv", index=False)
+
+print("\n✅ Phase 1 & 2 Completed Successfully!")
