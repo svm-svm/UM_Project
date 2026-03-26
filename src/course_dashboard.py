@@ -1,104 +1,124 @@
-import streamlit as st
 import pandas as pd
+import numpy as np
 import joblib
-import os
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+data = pd.read_csv("processed_edupro_data.csv")
 
-data_path = os.path.join(BASE_DIR, "edupro_prepared_dataset.csv")
-enroll_model_path = os.path.join(BASE_DIR, "model", "enrollment_model.pkl")
-rev_model_path = os.path.join(BASE_DIR, "model", "revenue_model.pkl")
+target_enroll = "EnrollmentCount"
+target_revenue = "CourseRevenue"
 
-data = pd.read_csv(data_path)
-enroll_model = joblib.load(enroll_model_path)
-rev_model = joblib.load(rev_model_path)
+#remove useless column
+drop_cols = [
+    "CourseID",
+    "CourseName",
+    "EnrollmentCount",
+    "CourseRevenue",
+    "CategoryRevenue",        
+    "MonthlyEnrollments",     
+    "AvgRevenuePerEnrollment" 
+]
 
-st.title("EduPro — Course Demand & Revenue Forecast")
-
-#sidebar
-st.sidebar.header("Course Inputs")
-
-course_price = st.sidebar.number_input("Course Price", 0.0, 1000.0, 100.0)
-duration = st.sidebar.number_input("Duration (hours)", 1.0, 100.0, 10.0)
-rating = st.sidebar.slider("Course Rating", 1.0, 5.0, 4.2)
-
-category = None
-level = None
-
-if "CourseCategory" in data.columns:
-    category = st.sidebar.selectbox(
-        "Category",
-        sorted(data["CourseCategory"].dropna().unique())
-    )
-
-if "CourseLevel" in data.columns:
-    level = st.sidebar.selectbox(
-        "Course Level",
-        sorted(data["CourseLevel"].dropna().unique())
-    )
+X = data.drop(columns=drop_cols, errors="ignore")
+y_enroll = data[target_enroll]
+y_revenue = data[target_revenue]
 
 
-def build_input_row():
+X_train, X_test, yE_train, yE_test, yR_train, yR_test = train_test_split(
+    X, y_enroll, y_revenue, test_size=0.2, random_state=42
+)
 
-    
-    row = data.iloc[[0]].copy()
+#preprocess
+cat_cols = X.select_dtypes(include="object").columns.tolist()
+num_cols = X.select_dtypes(include=np.number).columns.tolist()
 
-    
-    if "CoursePrice" in row.columns:
-        row["CoursePrice"] = course_price
+preprocessor = ColumnTransformer([
+    ("num", StandardScaler(), num_cols),
+    ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols)
+])
 
-    if "CourseDuration" in row.columns:
-        row["CourseDuration"] = duration
+models = {
+    "Linear": LinearRegression(),
+    "Ridge": Ridge(alpha=1.0),
+    "Lasso": Lasso(alpha=0.1),
+    "RandomForest": RandomForestRegressor(n_estimators=100, max_depth=5, random_state=42),
+    "GradientBoosting": GradientBoostingRegressor(n_estimators=100, max_depth=3, random_state=42)
+}
 
-    if "CourseRating" in row.columns:
-        row["CourseRating"] = rating
+#evaluate
+def evaluate(model, X_train, X_test, y_train, y_test):
 
-    if category is not None and "CourseCategory" in row.columns:
-        row["CourseCategory"] = category
+    pipe = Pipeline([
+        ("prep", preprocessor),
+        ("model", model)
+    ])
 
-    if level is not None and "CourseLevel" in row.columns:
-        row["CourseLevel"] = level
+    pipe.fit(X_train, y_train)
+    preds = pipe.predict(X_test)
 
-    
-    zero_cols = [
-        "EnrollmentCount",
-        "CourseRevenue",
-        "AvgRevenuePerEnrollment",
-        "MonthlyEnrollments",
-        "CategoryRevenue"
-    ]
+    mae = mean_absolute_error(y_test, preds)
+    rmse = np.sqrt(mean_squared_error(y_test, preds))
+    r2 = r2_score(y_test, preds)
 
-    for c in zero_cols:
-        if c in row.columns:
-            row[c] = 0
-
-    return row
-
-#prediction
-if st.button("Predict"):
-
-    input_df = build_input_row()
-
-    enroll_pred = max(0, enroll_model.predict(input_df)[0])
-    revenue_pred = max(0, rev_model.predict(input_df)[0])
-  
-    st.subheader("Predictions")
-
-    st.metric("Predicted Enrollments", int(enroll_pred))
-    st.metric("Predicted Revenue", f"${revenue_pred:,.2f}")
+    return pipe, mae, rmse, r2
 
 
-st.subheader("Category Revenue Comparison")
+#enrollment
+print("\n=== ENROLLMENT PREDICTION ===")
 
-if "CourseCategory" in data.columns:
-    cat_rev = data.groupby("CourseCategory")["CourseRevenue"].mean().sort_values()
-    st.bar_chart(cat_rev)
+best_enroll_model = None
+best_enroll_name = None
+best_rmse = float("inf")
+
+for name, model in models.items():
+
+    pipe, mae, rmse, r2 = evaluate(model, X_train, X_test, yE_train, yE_test)
+
+    print(f"{name}: MAE={mae:.2f} RMSE={rmse:.2f} R2={r2:.3f}")
+
+    if rmse < best_rmse and r2 < 0.999:
+        best_rmse = rmse
+        best_enroll_model = pipe
+        best_enroll_name = name
+
+print(f"\n✅ Best Enrollment Model: {best_enroll_name}")
 
 
-st.subheader("Top Courses")
+#revenue
+print("\n=== REVENUE PREDICTION ===")
 
-cols = [c for c in ["CourseName", "CourseRevenue"] if c in data.columns]
+best_rev_model = None
+best_rev_name = None
+best_rmse = float("inf")
 
-if cols:
-    top = data.sort_values("CourseRevenue", ascending=False)[cols].head(10)
-    st.dataframe(top)
+for name, model in models.items():
+
+    pipe, mae, rmse, r2 = evaluate(model, X_train, X_test, yR_train, yR_test)
+
+    print(f"{name}: MAE={mae:.2f} RMSE={rmse:.2f} R2={r2:.3f}")
+
+    if rmse < best_rmse:
+        best_rmse = rmse
+        best_rev_model = pipe
+        best_rev_name = name
+
+print(f"\n✅ Best Revenue Model: {best_rev_name}")
+
+joblib.dump({
+    "model": best_enroll_model,
+    "model_name": best_enroll_name,
+    "features": X.columns.tolist()
+}, "enrollment_model.pkl")
+
+joblib.dump({
+    "model": best_rev_model,
+    "model_name": best_rev_name,
+    "features": X.columns.tolist()
+}, "revenue_model.pkl")
+
