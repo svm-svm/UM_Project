@@ -5,8 +5,8 @@ import joblib
 import matplotlib.pyplot as plt
 
 #models
-enroll_data = joblib.load("enrollment_model.pkl")
-rev_data = joblib.load("revenue_model.pkl")
+enroll_data = joblib.load("model/enrollment_model.pkl")
+rev_data = joblib.load("model/revenue_model.pkl")
 
 enroll_model = enroll_data["model"]
 rev_model = rev_data["model"]
