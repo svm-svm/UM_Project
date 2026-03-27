@@ -77,8 +77,6 @@ if st.button("Predict"):
     st.metric("Predicted Enrollment", f"{int(enroll_pred)} students")
     st.metric("Predicted Revenue", f"₹ {int(revenue_pred)}")
 
-    st.info("Note: Enrollment prediction is less accurate due to missing behavioral data.")
-
     st.subheader("Revenue vs Price Analysis")
 
     price_range = np.linspace(10, 500, 30)
